@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投資組合互動式儀表板 (Portfolio Dashboard)</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --border: #334155;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --radius: 10px;
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); }
+        body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+        .container { max-width: 1260px; margin: 0 auto; }
+        
+        /* Top Status Bar: Current Date & TradingView Live Sync */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            background: rgba(30, 41, 59, 0.7);
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+            font-size: 0.85rem;
+        }
+        .top-date {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #93c5fd;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .top-market-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .market-pill {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            padding: 3px 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            font-size: 0.78rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-refresh-market {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-refresh-market:hover {
+            background: var(--primary);
+            color: #fff;
+        }
+        .update-time-tag {
+            color: var(--muted);
+            font-size: 0.75rem;
+        }
+
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+        h1 { font-size: 1.6rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+        .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+        
+        /* Portfolio Controls: Tabs + Action Bar */
+        .portfolio-header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .portfolio-nav { display: flex; gap: 6px; background: var(--card-bg); padding: 6px; border-radius: var(--radius); border: 1px solid var(--border); overflow-x: auto; }
+        .tab-btn { background: transparent; color: var(--muted); border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: 0.2s; white-space: nowrap; }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active { background: var(--primary); color: #fff; }
+        
+        /* Action buttons for portfolio */
+        .portfolio-actions { display: flex; align-items: center; gap: 6px; background: var(--card-bg); padding: 6px; border-radius: var(--radius); border: 1px solid var(--border); }
+        .btn-action { background: transparent; border: 1px solid transparent; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: 0.2s; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .btn-add-pf { background: rgba(59, 130, 246, 0.15); color: var(--primary); border-color: rgba(59, 130, 246, 0.3); }
+        .btn-add-pf:hover { background: var(--primary); color: #fff; }
+        .btn-rename-pf { color: var(--muted); border-color: var(--border); }
+        .btn-rename-pf:hover { color: var(--text); border-color: var(--muted); background: rgba(255, 255, 255, 0.05); }
+        .btn-del-pf { color: var(--danger); background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25); }
+        .btn-del-pf:hover { background: var(--danger); color: #fff; }
+        
+        /* Stat Summary Cards - 水平排列顯示 (Horizontal Row) */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        @media (max-width: 900px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 480px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .summary-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0;
+        }
+        .summary-title { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .summary-val { font-size: 1.5rem; font-weight: 700; margin: 6px 0 2px; }
+        .summary-sub { font-size: 0.8rem; color: var(--muted); }
+
+        /* Dashboard Grid */
+        .dashboard-grid { display: grid; grid-template-columns: 1.35fr 0.65fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 1024px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+        .card-title { font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+        /* Form Controls */
+        .stock-form { display: grid; grid-template-columns: 1.1fr 1.2fr 0.8fr 0.9fr 1.1fr auto; gap: 10px; align-items: flex-end; background: rgba(15,23,42,0.5); padding: 14px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 6px; }
+        @media (max-width: 860px) { .stock-form { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 480px) { .stock-form { grid-template-columns: 1fr; } }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+        .form-control { background: #0f172a; border: 1px solid var(--border); color: var(--text); padding: 9px 12px; border-radius: 6px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+        .form-control:focus { border-color: var(--primary); }
+        .form-control-autofilled { border-color: rgba(16, 185, 129, 0.5) !important; background: rgba(16, 185, 129, 0.08) !important; }
+        .btn { padding: 9px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; white-space: nowrap; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-danger { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid var(--danger); }
+        .btn-danger:hover { background: var(--danger); color: #fff; }
+        .btn-sm { padding: 4px 8px; font-size: 0.75rem; }
+        .btn-outline { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+        .btn-outline:hover { color: var(--text); border-color: var(--muted); }
+
+        /* Table */
+        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left; }
+        th { background: #0f172a; padding: 10px 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #263349; }
+        .stock-cell { display: flex; align-items: center; gap: 8px; }
+        .ticker-badge { font-weight: 700; color: #60a5fa; letter-spacing: 0.5px; }
+        .stock-name { font-size: 0.82rem; color: #cbd5e1; }
+        .pct-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 95px; }
+        .pct-bar-track { flex-grow: 1; height: 7px; background: #334155; border-radius: 4px; overflow: hidden; }
+        .pct-bar-fill { height: 100%; border-radius: 4px; }
+        .pct-num { font-weight: 600; min-width: 42px; text-align: right; font-size: 0.8rem; }
+        .empty-row { text-align: center; color: var(--muted); padding: 30px; }
+        
+        .price-editable-box { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s; border: 1px solid transparent; }
+        .price-editable-box:hover { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); }
+        .tv-price-tag { font-family: inherit; font-weight: 600; color: var(--text); }
+        .tv-source-badge { font-size: 0.72rem; color: #38bdf8; background: rgba(56, 189, 248, 0.1); padding: 2px 5px; border-radius: 4px; margin-left: 4px; }
+        .edit-pen { font-size: 0.72rem; opacity: 0.6; }
+
+        /* Chart */
+        .chart-box { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; }
+        .canvas-wrap { position: relative; width: 250px; height: 250px; }
+        .chart-tooltip { position: absolute; background: rgba(15,23,42,0.95); color: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; pointer-events: none; display: none; z-index: 10; transform: translate(-50%, -120%); white-space: nowrap; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
+        .legend-box { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-height: 150px; overflow-y: auto; width: 100%; padding-right: 4px; }
+        .legend-badge { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; background: rgba(15,23,42,0.5); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
+        .legend-color { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+        .legend-text { display: flex; gap: 4px; align-items: baseline; }
+
+        /* Footer */
+        footer { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 網頁頂端狀態列：顯示當前日期與 TradingView 收市價自動同步資訊 -->
+    <div class="top-bar">
+        <div class="top-date" id="topCurrentDate">
+            📅 <span id="currentDateText">正在載入日期...</span>
+        </div>
+        <div class="top-market-info">
+            <span class="market-pill">🟢 TradingView 即時連線更新中</span>
+            <button class="btn-refresh-market" onclick="syncAllClosingPrices(true)" title="每次點擊直接從 tradingview.com 獲取最新收市價">
+                🔄 更新 TradingView 收市價
+            </button>
+            <span class="update-time-tag" id="lastSyncStatus">數據源：直接連線 tradingview.com</span>
+        </div>
+    </div>
+
+    <header>
+        <div>
+            <h1>📊 Portfoilo</h1>
+            <p class="subtitle">Discipline</p>
+        </div>
+        <div class="portfolio-header-controls">
+            <div class="portfolio-nav" id="portfolioNav"></div>
+            <!-- 組合操作區：新增、重新命名、刪除組合 -->
+            <div class="portfolio-actions">
+                <button class="btn-action btn-add-pf" onclick="handleAddPortfolio()" title="新增一個新的投資組合">＋ 新增組合</button>
+                <button class="btn-action btn-rename-pf" onclick="handleRenamePortfolio()" title="重新命名目前選取的投資組合">✏️ 重新命名</button>
+                <button class="btn-action btn-del-pf" onclick="handleDeletePortfolio()" title="刪除目前選取的投資組合">🗑️ 刪除組合</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 統計摘要卡片：4個指標水平排列顯示 (Horizontal Alignment) -->
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-title">總投資成本 (Total Cost)</div>
+            <div class="summary-val" id="summaryTotalCost">$0.00</div>
+            <div class="summary-sub" id="summaryMarketVal">總市值: $0.00</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-title">持股檔數 (Holdings)</div>
+            <div class="summary-val" id="summaryStockCount">0 檔</div>
+            <div class="summary-sub">持倉分散度</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-title">最大持倉 (Top Holding)</div>
+            <div class="summary-val" id="summaryTopHolding">-</div>
+            <div class="summary-sub" id="summaryTopHoldingPct">0.00%</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-title">當前組合盈虧 (Portfolio P/L)</div>
+            <div class="summary-val" id="summaryTotalPL">$0.00</div>
+            <div class="summary-sub" id="summaryTotalPLPct">0.00%</div>
+        </div>
+    </div>
+
+    <!-- 主要區塊：新增表單 + 股票清單 + 圓餅圖 -->
+    <div class="dashboard-grid">
+        <!-- 左側：輸入表單與股票表格 -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">➕ 新增股票</div>
+                <button class="btn-outline btn-sm" onclick="resetToDefault()">載入範例資料</button>
+            </div>
+
+            <!-- 新增欄：輸入代號即時自 tradingview.com 獲取現價與自動帶入中文名 -->
+            <form id="stockForm" class="stock-form" onsubmit="handleAddStock(event)">
+                <div class="form-group">
+                    <label for="inputTicker">股票代號</label>
+                    <input type="text" id="inputTicker" class="form-control" placeholder="例: NVDA, 700, 1810.HK" oninput="handleTickerInput(this.value)" required />
+                </div>
+                <div class="form-group">
+                    <label for="inputName">股票名稱 (自動填入 / 可自訂)</label>
+                    <input type="text" id="inputName" class="form-control" placeholder="輸入代號自動帶入中文名" />
+                </div>
+                <div class="form-group">
+                    <label for="inputQty">數量</label>
+                    <input type="number" id="inputQty" class="form-control" placeholder="例: 100" min="0.0001" step="any" required />
+                </div>
+                <div class="form-group">
+                    <label for="inputPrice">平均買入價</label>
+                    <input type="number" id="inputPrice" class="form-control" placeholder="例: 380.50" min="0.0001" step="any" required />
+                </div>
+                <div class="form-group">
+                    <label for="inputCurrentPrice">當前現價 (TradingView即時獲取)</label>
+                    <input type="number" id="inputCurrentPrice" class="form-control" placeholder="連線獲取收市價..." step="any" />
+                </div>
+                <button type="submit" class="btn btn-primary">加入組合</button>
+            </form>
+            <div id="tickerHint" style="font-size:0.8rem;margin:-2px 0 16px 4px;min-height:18px;"></div>
+
+            <div class="card-header" style="margin-top: 10px;">
+                <div class="card-title">📋 持倉清單與分佈佔比</div>
+                <span id="currentPfName" style="color: #60a5fa; font-size: 0.85rem;">當前組合</span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>股票代號 / 股票名稱</th>
+                            <th style="text-align: right;">數量</th>
+                            <th style="text-align: right;">平均買入價</th>
+                            <th style="text-align: right;">當前現價 (TradingView)</th>
+                            <th style="text-align: right;">當前市值</th>
+                            <th style="text-align: right;">個別盈虧 (P/L)</th>
+                            <th>佔比 (Distribution)</th>
+                            <th style="text-align: center;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 右側：圓餅圖 Pie Chart (股票分佈依 TradingView 最新收市價計算) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🥧 Distribution (股票分佈)</div>
+                <span style="color: var(--muted); font-size: 0.8rem;">依 TradingView 當前市值計算</span>
+            </div>
+            <div class="chart-box">
+                <div class="canvas-wrap">
+                    <canvas id="pieChart" width="250" height="250"></canvas>
+                    <div id="chartTooltip" class="chart-tooltip"></div>
+                </div>
+                <div class="legend-box" id="chartLegend"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div>💡 提示：所有現價均直接從 tradingview.com 即時獲取，不自本地資料庫讀取。點擊現價 ✏️ 可隨時手動微調。</div>
+        <div>
+            <button class="btn-outline btn-sm" onclick="clearPortfolio()">清空當前組合股票</button>
+        </div>
+    </footer>
+</div>
+
+<script>
+    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#e11d48', '#84cc16', '#a855f7'];
+
+    // 中文名稱字典（僅用於名稱自動填入，不儲存或讀取靜態股價）
+    const CHINESE_NAME_MAP = {
+        "NVDA": "輝達", "AAPL": "蘋果", "MSFT": "微軟", "AMZN": "亞馬遜", "GOOGL": "谷歌",
+        "GOOG": "谷歌", "TSLA": "特斯拉", "META": "臉書", "TSM": "台積電", "AMD": "超微",
+        "INTC": "英特爾", "AVGO": "博通", "QCOM": "高通", "TXN": "德州儀器", "ASML": "艾司摩爾",
+        "ARM": "安謀", "MU": "美光科技", "AMAT": "應用材料", "LRCX": "泛林集團", "KLAC": "科磊",
+        "MRVL": "邁威爾科技", "SMCI": "超微電腦", "CSCO": "思科", "IBM": "國際商業機器", "ORCL": "甲骨文",
+        "CRM": "賽富時", "NOW": "縱橫電腦", "ADBE": "奧多比", "INTU": "財捷", "PANW": "派拓網絡",
+        "CRWD": "群聚效應", "PLTR": "帕蘭提爾", "SNOW": "雪花", "UBER": "優步", "ABNB": "愛彼迎",
+        "DASH": "戶戶送", "SHOP": "Shopify", "SQ": "方塊", "PYPL": "貝寶", "COIN": "比特幣基地",
+        "HOOD": "羅賓漢", "MSTR": "微策略", "DIS": "迪士尼", "NFLX": "網飛", "WBD": "華納兄弟探索",
+        "SPOT": "聲田", "SONY": "索尼", "BABA": "阿里巴巴", "JD": "京東", "PDD": "拼多多",
+        "BIDU": "百度", "NTES": "網易", "NIO": "蔚來", "XPEV": "小鵬汽車", "LI": "理想汽車",
+        "FUTU": "富途控股", "TIGR": "老虎證券", "V": "威士卡", "MA": "萬事達卡", "AXP": "美國運通",
+        "JPM": "摩根大通", "BAC": "美國銀行", "WFC": "富國銀行", "C": "花旗集團", "GS": "高盛",
+        "MS": "摩根士丹利", "BLK": "貝萊德", "SCHW": "嘉信理財", "BRK.B": "波克夏B", "BRK.A": "波克夏A",
+        "JNJ": "嬌生", "PFE": "輝瑞", "MRK": "默克", "ABBV": "艾伯維", "LLY": "禮來",
+        "UNH": "聯合健康", "CVS": "西維斯", "PG": "寶僑", "KO": "可口可樂", "PEP": "百事可樂",
+        "COST": "好市多", "WMT": "沃爾瑪", "TGT": "目標百貨", "HD": "家得寶", "LOW": "勞氏",
+        "MCD": "麥當勞", "SBUX": "星巴克", "NKE": "耐吉", "LULU": "露露檸檬", "CAT": "卡特彼勒",
+        "DE": "約翰迪爾", "GE": "通用電氣", "BA": "波音", "RTX": "雷神技術", "LMT": "洛克希德馬丁",
+        "HON": "漢威聯合", "UPS": "聯合包裹", "F": "福特汽車", "GM": "通用汽車", "TM": "豐田汽車",
+        "HMC": "本田汽車", "XOM": "埃克森美孚", "CVX": "雪佛龍", "COP": "康菲石油", "SLB": "斯倫貝謝",
+        "NEE": "新紀元能源", "VOO": "先鋒標普500ETF", "SPY": "標普500指數ETF", "IVV": "安碩標普500ETF",
+        "QQQ": "納斯達克100指數ETF", "TQQQ": "3倍做多納斯達克ETF", "SQQQ": "3倍做空納斯達克ETF",
+        "DIA": "道瓊工業指數ETF", "IWM": "羅素2000小型股ETF", "VTI": "先鋒全市場ETF", "VXUS": "先鋒全球不含美ETF",
+        "VEA": "先鋒已開發市場ETF", "VWO": "先鋒新興市場ETF", "SCHD": "嘉信美國高股息ETF", "VYM": "先鋒高股利ETF",
+        "JEPI": "摩根大通股票溢價收益ETF", "JEPQ": "摩根大通納指溢價收益ETF", "SMH": "半導體ETF",
+        "SOXX": "安碩半導體ETF", "SOXL": "3倍做多半導體ETF", "SOXS": "3倍做空半導體ETF", "XLK": "科技類股ETF",
+        "XLF": "金融類股ETF", "XLE": "能源類股ETF", "XLV": "醫療保健ETF", "XLI": "工業類股ETF",
+        "XLY": "消費非必需品ETF", "XLP": "消費必需品ETF", "XLU": "公用事業ETF", "XLB": "原物料類股ETF",
+        "XLRE": "房地產類股ETF", "TLT": "20年期公債ETF", "IEF": "7-10年期公債ETF", "SHY": "1-3年期公債ETF",
+        "BND": "先鋒總體債券ETF", "AGG": "安碩核心美國債券ETF", "GLD": "SPDR黃金ETF", "SLV": "安碩白銀ETF",
+        "IAU": "安碩黃金ETF", "USO": "美國原油基金ETF", "ARKK": "方舟創新ETF",
+        "0700.HK": "騰訊控股", "9988.HK": "阿里巴巴", "3690.HK": "美團", "0941.HK": "中國移動",
+        "0005.HK": "匯豐控股", "2800.HK": "盈富基金", "1810.HK": "小米集團", "9618.HK": "京東集團",
+        "1211.HK": "比亞迪股份", "2318.HK": "中國平安", "0388.HK": "香港交易所", "0883.HK": "中國海洋石油",
+        "0939.HK": "建設銀行", "1398.HK": "工商銀行", "3988.HK": "中國銀行", "2015.HK": "理想汽車",
+        "9868.HK": "小鵬汽車", "9866.HK": "蔚來汽車", "1024.HK": "快手", "9999.HK": "網易",
+        "0001.HK": "長和", "0002.HK": "中電控股", "0003.HK": "香港中華煤氣", "0006.HK": "電能實業",
+        "0011.HK": "恒生銀行", "0012.HK": "恒基地產", "0016.HK": "新鴻基地產", "0017.HK": "新世界發展",
+        "0027.HK": "銀河娛樂", "0066.HK": "港鐵公司", "0175.HK": "吉利汽車", "0267.HK": "中信股份",
+        "0288.HK": "萬洲國際", "0386.HK": "中國石油化工", "0669.HK": "創科實業", "0857.HK": "中國石油股份",
+        "0968.HK": "信義光能", "0992.HK": "聯想集團", "1088.HK": "中國神華", "1093.HK": "石藥集團",
+        "1109.HK": "華潤置地", "1113.HK": "長實集團", "1177.HK": "中生製藥", "1876.HK": "百威亞太",
+        "1928.HK": "金沙中國", "1929.HK": "周大福", "2020.HK": "安踏體育", "2269.HK": "藥明生物",
+        "2313.HK": "申洲國際", "2319.HK": "蒙牛乳業", "2328.HK": "中國財險", "2331.HK": "李寧",
+        "2382.HK": "舜宇光學", "2388.HK": "中銀香港", "2688.HK": "新奧能源", "2828.HK": "恒生中國企業",
+        "3033.HK": "南方恒生科技", "3067.HK": "安碩恒生科技", "3968.HK": "招商銀行", "6690.HK": "海爾智家",
+        "6862.HK": "海底撈", "9961.HK": "攜程集團", "9992.HK": "泡泡瑪特"
+    };
+
+    // 格式化股票代號 (支援純數字 700 -> 0700.HK, 5 -> 0005.HK, 小寫英文字母等)
+    function normalizeTicker(raw) {
+        if (!raw) return "";
+        let t = raw.trim().toUpperCase();
+        if (/^\d{1,5}$/.test(t)) {
+            t = t.padStart(4, '0') + '.HK';
+        } else if (/^\d{1,5}\.HK$/i.test(t)) {
+            const num = t.split('.')[0];
+            t = num.padStart(4, '0') + '.HK';
+        }
+        return t;
+    }
+
+    // 取得 TradingView 格式代號
+    function getTradingViewSymbol(ticker) {
+        const norm = normalizeTicker(ticker);
+        if (norm.endsWith(".HK")) {
+            const num = parseInt(norm.replace(".HK", ""), 10);
+            return "HKEX:" + num;
+        }
+        if (/^\d+$/.test(norm)) {
+            return "HKEX:" + parseInt(norm, 10);
+        }
+        if (norm.includes(":")) {
+            return norm;
+        }
+        return norm;
+    }
+
+    // 取得純中文股票名稱 (僅提供名稱對照)
+    function getChineseStockName(ticker) {
+        const norm = normalizeTicker(ticker);
+        if (CHINESE_NAME_MAP[norm]) return CHINESE_NAME_MAP[norm];
+        const upper = ticker ? ticker.trim().toUpperCase() : "";
+        if (CHINESE_NAME_MAP[upper]) return CHINESE_NAME_MAP[upper];
+        return "";
+    }
+
+    // 每次更新完全自 tradingview.com 獲取最新收市價（不從資料庫讀取價格）
+    async function fetchFromTradingView(tickers) {
+        if (!tickers || tickers.length === 0) return {};
+        
+        const symbols = [];
+        const symToTicker = {};
+
+        tickers.forEach(t => {
+            const norm = normalizeTicker(t);
+            if (norm.endsWith(".HK")) {
+                const num = parseInt(norm.replace(".HK", ""), 10);
+                const sym = "HKEX:" + num;
+                symbols.push(sym);
+                symToTicker[sym] = norm;
+            } else if (/^\d+$/.test(norm)) {
+                const num = parseInt(norm, 10);
+                const sym = "HKEX:" + num;
+                symbols.push(sym);
+                symToTicker[sym] = norm;
+            } else {
+                // 美股標的嘗試主流交易所
+                const clean = norm.replace(/^(NASDAQ|NYSE|AMEX):/i, "");
+                ["NASDAQ:" + clean, "NYSE:" + clean, "AMEX:" + clean].forEach(s => {
+                    symbols.push(s);
+                    symToTicker[s] = clean;
+                });
+            }
+        });
+
+        const payload = JSON.stringify({
+            symbols: { tickers: symbols },
+            columns: ["close", "close|1D", "change", "description"]
+        });
+
+        // 直接向 tradingview.com 或其 CORS 代理發送請求
+        const endpoints = [
+            "https://scanner.tradingview.com/global/scan",
+            "https://scanner.tradingview.com/america/scan",
+            "https://scanner.tradingview.com/hongkong/scan",
+            "https://corsproxy.io/?url=" + encodeURIComponent("https://scanner.tradingview.com/global/scan"),
+            "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://scanner.tradingview.com/global/scan")
+        ];
+
+        const priceMap = {};
+
+        for (const url of endpoints) {
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: payload
+                });
+                if (res.ok) {
+                    const resJson = await res.json();
+                    if (resJson && Array.isArray(resJson.data) && resJson.data.length > 0) {
+                        resJson.data.forEach(item => {
+                            const sKey = item.s;
+                            const closePrice = (item.d[0] !== null && item.d[0] !== undefined) ? item.d[0] : item.d[1];
+                            if (closePrice !== null && closePrice !== undefined) {
+                                const original = symToTicker[sKey] || sKey.split(":")[1] || sKey;
+                                priceMap[original] = closePrice;
+                                priceMap[sKey] = closePrice;
+                                priceMap[normalizeTicker(original)] = closePrice;
+                            }
+                        });
+                        if (Object.keys(priceMap).length > 0) {
+                            break; // 成功從 tradingview.com 取得報價！
+                        }
+                    }
+                }
+            } catch (err) {
+                // 嘗試下一端點
+            }
+        }
+
+        return priceMap;
+    }
+
+    // 預設範例投資組合
+    const DEFAULT_DATA = {
+        "美股科技組合": [
+            { ticker: "NVDA", name: "輝達", quantity: 60, avgPrice: 180.00, currentPrice: 233.95 },
+            { ticker: "AAPL", name: "蘋果", quantity: 40, avgPrice: 260.00, currentPrice: 333.69 },
+            { ticker: "MSFT", name: "微軟", quantity: 20, avgPrice: 450.00, currentPrice: 517.53 },
+            { ticker: "AMZN", name: "亞馬遜", quantity: 30, avgPrice: 210.00, currentPrice: 251.52 },
+            { ticker: "GOOGL", name: "谷歌", quantity: 35, avgPrice: 280.00, currentPrice: 343.50 }
+        ],
+        "港股核心藍籌組合": [
+            { ticker: "0700.HK", name: "騰訊控股", quantity: 300, avgPrice: 382.00, currentPrice: 421.20 },
+            { ticker: "9988.HK", name: "阿里巴巴", quantity: 600, avgPrice: 88.00, currentPrice: 104.40 },
+            { ticker: "3690.HK", name: "美團", quantity: 400, avgPrice: 65.00, currentPrice: 70.20 },
+            { ticker: "0941.HK", name: "中國移動", quantity: 1000, avgPrice: 72.50, currentPrice: 78.85 },
+            { ticker: "0005.HK", name: "匯豐控股", quantity: 1200, avgPrice: 135.00, currentPrice: 149.50 }
+        ],
+        "穩健高息與ETF組合": [
+            { ticker: "VOO", name: "先鋒標普500ETF", quantity: 25, avgPrice: 620.00, currentPrice: 707.54 },
+            { ticker: "QQQ", name: "納斯達克100指數ETF", quantity: 20, avgPrice: 660.00, currentPrice: 749.58 },
+            { ticker: "SCHD", name: "嘉信美國高股息ETF", quantity: 120, avgPrice: 30.00, currentPrice: 32.72 },
+            { ticker: "2800.HK", name: "盈富基金", quantity: 2000, avgPrice: 21.50, currentPrice: 24.58 }
+        ]
+    };
+
+    let portfolios = {};
+    let currentPf = "";
+    let sliceAngles = [];
+    let debounceTimer = null;
+
+    // 初始化與頂端日期更新
+    function init() {
+        updateTopDate();
+        loadPortfolios();
+        renderTabs();
+        renderDashboard();
+        initChartEvents();
+    }
+
+    // 於網頁頂端顯示當前日期
+    function updateTopDate() {
+        const now = new Date();
+        const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+        const dateStr = now.toLocaleDateString('zh-TW', options);
+        const timeStr = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        const el = document.getElementById("currentDateText");
+        if (el) el.innerHTML = "<strong>" + dateStr + "</strong> <span style='font-weight:normal;opacity:0.8;'>(" + timeStr + ")</span>";
+    }
+
+    function loadPortfolios() {
+        const saved = localStorage.getItem('user_portfolio_data_v9');
+        const savedPf = localStorage.getItem('user_portfolio_active_v9');
+        if (saved) {
+            try { 
+                portfolios = JSON.parse(saved); 
+            } catch(e) { 
+                portfolios = JSON.parse(JSON.stringify(DEFAULT_DATA)); 
+            }
+        } else {
+            portfolios = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        }
+
+        const keys = Object.keys(portfolios);
+        if (keys.length === 0) {
+            portfolios = JSON.parse(JSON.stringify(DEFAULT_DATA));
+        }
+        currentPf = (savedPf && portfolios[savedPf]) ? savedPf : Object.keys(portfolios)[0];
+    }
+
+    function save() {
+        localStorage.setItem('user_portfolio_data_v9', JSON.stringify(portfolios));
+        localStorage.setItem('user_portfolio_active_v9', currentPf);
+    }
+
+    // 輸入代號時：自動填入中文名，並每次即時向 tradingview.com 獲取現價
+    function handleTickerInput(val) {
+        const normalized = normalizeTicker(val);
+        const nameField = document.getElementById("inputName");
+        const priceField = document.getElementById("inputCurrentPrice");
+        const hintField = document.getElementById("tickerHint");
+
+        if (!val || !val.trim()) {
+            if (nameField) nameField.value = "";
+            if (priceField) priceField.value = "";
+            if (hintField) hintField.innerHTML = "";
+            return;
+        }
+
+        // 自動帶入中文名稱
+        const autoName = getChineseStockName(val);
+        if (autoName && nameField) {
+            nameField.value = autoName;
+            nameField.classList.add("form-control-autofilled");
+        } else if (nameField) {
+            nameField.classList.remove("form-control-autofilled");
+        }
+
+        clearTimeout(debounceTimer);
+        if (hintField) {
+            hintField.innerHTML = "<span style='color:#60a5fa;'>⏳ 正在連線 tradingview.com 獲取最新收市價...</span>";
+        }
+
+        // 每次輸入防抖向 tradingview.com 請求最新價格
+        debounceTimer = setTimeout(async () => {
+            const liveMap = await fetchFromTradingView([val]);
+            const livePrice = liveMap[normalized] || liveMap[val.trim().toUpperCase()];
+            if (livePrice && priceField) {
+                priceField.value = livePrice;
+                priceField.classList.add("form-control-autofilled");
+                if (hintField) {
+                    const nameDisp = autoName ? (" (" + autoName + ")") : "";
+                    hintField.innerHTML = "<span style='color:#10b981;font-weight:500;'>🟢 tradingview.com 獲取成功：<strong>" + normalized + nameDisp + "</strong> 最新收市價 <strong>$" + Number(livePrice).toFixed(2) + "</strong></span>";
+                }
+            } else {
+                if (priceField) priceField.classList.remove("form-control-autofilled");
+                if (hintField) {
+                    hintField.innerHTML = "<span style='color:#f59e0b;'>ℹ️ 請確認代號或手動輸入目前現價，加入後亦可隨時點擊現價微調</span>";
+                }
+            }
+        }, 350);
+    }
+
+    // 每次更新股價完全自 tradingview.com 即時獲取，不自本地資料庫讀取
+    async function syncAllClosingPrices(showNotification = true) {
+        const statusEl = document.getElementById("lastSyncStatus");
+        if (statusEl) {
+            statusEl.textContent = "⏳ 正在直接向 tradingview.com 請求全持倉最新收市價...";
+            statusEl.style.color = "#60a5fa";
+        }
+
+        // 收集所有持倉股票代號
+        const tickersSet = new Set();
+        Object.keys(portfolios).forEach(pf => {
+            portfolios[pf].forEach(s => tickersSet.add(s.ticker));
+        });
+
+        const tickersList = Array.from(tickersSet);
+        if (tickersList.length === 0) {
+            if (showNotification) alert("目前組合內無股票。");
+            return;
+        }
+
+        // 直接向 tradingview.com 獲取最新上一日收市價
+        const livePrices = await fetchFromTradingView(tickersList);
+
+        let updatedCount = 0;
+        const missingStocks = [];
+
+        Object.keys(portfolios).forEach(pf => {
+            portfolios[pf].forEach(stock => {
+                const norm = normalizeTicker(stock.ticker);
+                const live = livePrices[norm] || livePrices[stock.ticker] || livePrices[stock.ticker.toUpperCase()];
+                if (live !== undefined && live > 0) {
+                    stock.currentPrice = live;
+                    updatedCount++;
+                } else {
+                    if (pf === currentPf) {
+                        missingStocks.push(stock);
+                    }
+                }
+            });
+        });
+
+        // 若有少數代號未在 tradingview.com 掃描返回，提示用戶確認
+        if (showNotification && missingStocks.length > 0) {
+            for (const s of missingStocks) {
+                const userPrice = prompt(
+                    "tradingview.com 未返回【" + s.ticker + " (" + s.name + ")】的收市價。\\n請確認代號或輸入最新現價：",
+                    s.currentPrice || s.avgPrice
+                );
+                if (userPrice !== null) {
+                    const p = parseFloat(userPrice);
+                    if (!isNaN(p) && p > 0) {
+                        s.currentPrice = p;
+                        updatedCount++;
+                    }
+                }
+            }
+        }
+
+        save();
+        renderDashboard();
+
+        const now = new Date();
+        const timeStamp = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        if (statusEl) {
+            statusEl.textContent = "已於 " + timeStamp + " 直接自 tradingview.com 獲取最新收市價";
+            statusEl.style.color = '#34d399';
+        }
+
+        if (showNotification) {
+            alert("✅ 已成功直接自 tradingview.com 獲取最新收市價！共更新 " + updatedCount + " 筆股票，市值與分佈已重新計算。");
+        }
+    }
+
+    // 點擊表格內現價快速自訂更新
+    function editStockPrice(idx) {
+        const stock = (portfolios[currentPf] || [])[idx];
+        if (!stock) return;
+        const input = prompt("請輸入「" + stock.ticker + " (" + stock.name + ")」的最新 TradingView 收市現價：", stock.currentPrice);
+        if (input !== null) {
+            const val = parseFloat(input);
+            if (!isNaN(val) && val > 0) {
+                stock.currentPrice = val;
+                save();
+                renderDashboard();
+            } else {
+                alert("請輸入有效的正數現價！");
+            }
+        }
+    }
+
+    // 渲染投資組合標籤
+    function renderTabs() {
+        const nav = document.getElementById("portfolioNav");
+        nav.innerHTML = "";
+        Object.keys(portfolios).forEach(name => {
+            const btn = document.createElement("button");
+            btn.className = "tab-btn " + (name === currentPf ? 'active' : '');
+            btn.textContent = name;
+            btn.onclick = () => { currentPf = name; save(); renderTabs(); renderDashboard(); };
+            nav.appendChild(btn);
+        });
+    }
+
+    // 新增投資組合
+    function handleAddPortfolio() {
+        const name = prompt("請輸入新投資組合名稱：", "自訂組合");
+        if (name && name.trim()) {
+            const cleanName = name.trim();
+            if (portfolios[cleanName]) {
+                alert("已存在名稱為「" + cleanName + "」的投資組合！");
+                return;
+            }
+            portfolios[cleanName] = [];
+            currentPf = cleanName;
+            save();
+            renderTabs();
+            renderDashboard();
+        }
+    }
+
+    // 重新命名當前投資組合
+    function handleRenamePortfolio() {
+        const currentName = currentPf;
+        const newName = prompt("請輸入「" + currentName + "」的新名稱：", currentName);
+        if (!newName || !newName.trim()) return;
+
+        const cleanNew = newName.trim();
+        if (cleanNew === currentName) return;
+
+        if (portfolios[cleanNew]) {
+            alert("已存在名為「" + cleanNew + "」的投資組合，請更換名稱！");
+            return;
+        }
+
+        const updated = {};
+        Object.keys(portfolios).forEach(k => {
+            if (k === currentName) {
+                updated[cleanNew] = portfolios[currentName];
+            } else {
+                updated[k] = portfolios[k];
+            }
+        });
+
+        portfolios = updated;
+        currentPf = cleanNew;
+        save();
+        renderTabs();
+        renderDashboard();
+    }
+
+    // 刪除當前投資組合
+    function handleDeletePortfolio() {
+        const names = Object.keys(portfolios);
+        if (names.length <= 1) {
+            alert("目前只剩下最後一個投資組合，無法刪除！若需清空內容請使用「清空當前組合股票」。");
+            return;
+        }
+
+        const currentName = currentPf;
+        const count = (portfolios[currentName] || []).length;
+        const confirmMsg = count > 0 
+            ? "確定要刪除「" + currentName + "」嗎？\\n此組合目前包含 " + count + " 檔股票，刪除後將無法恢復。"
+            : "確定要刪除「" + currentName + "」嗎？";
+
+        if (!confirm(confirmMsg)) return;
+
+        delete portfolios[currentName];
+        currentPf = Object.keys(portfolios)[0];
+        save();
+        renderTabs();
+        renderDashboard();
+    }
+
+    // 新增股票
+    function handleAddStock(e) {
+        e.preventDefault();
+        const rawTicker = document.getElementById("inputTicker").value;
+        const ticker = normalizeTicker(rawTicker);
+        const customName = document.getElementById("inputName").value.trim();
+        const autoName = getChineseStockName(ticker);
+        const finalName = customName || autoName || ticker;
+        
+        const quantity = parseFloat(document.getElementById("inputQty").value);
+        const avgPrice = parseFloat(document.getElementById("inputPrice").value);
+        
+        const rawCurrentPrice = parseFloat(document.getElementById("inputCurrentPrice").value);
+        const currentPrice = (!isNaN(rawCurrentPrice) && rawCurrentPrice > 0) ? rawCurrentPrice : avgPrice;
+
+        if (!ticker || quantity <= 0 || avgPrice <= 0) return;
+
+        const list = portfolios[currentPf] || [];
+        const existing = list.find(s => normalizeTicker(s.ticker) === ticker);
+        if (existing) {
+            const displayName = existing.name || ticker;
+            if (confirm(ticker + " (" + displayName + ") 已存在，是否按加權平均累計數量與成本？")) {
+                const totalCost = (existing.quantity * existing.avgPrice) + (quantity * avgPrice);
+                existing.quantity += quantity;
+                existing.avgPrice = totalCost / existing.quantity;
+                existing.currentPrice = currentPrice;
+                existing.name = finalName;
+            } else {
+                existing.quantity = quantity;
+                existing.avgPrice = avgPrice;
+                existing.currentPrice = currentPrice;
+                existing.name = finalName;
+            }
+        } else {
+            list.push({ ticker, name: finalName, quantity, avgPrice, currentPrice });
+        }
+        portfolios[currentPf] = list;
+        save();
+        document.getElementById("stockForm").reset();
+        document.getElementById("tickerHint").innerHTML = "";
+        document.getElementById("inputTicker").focus();
+        renderDashboard();
+    }
+
+    function deleteStock(idx) {
+        const item = portfolios[currentPf][idx];
+        const label = item ? (item.ticker + (item.name ? " (" + item.name + ")" : "")) : "";
+        if (confirm("確定刪除 " + label + "？")) {
+            portfolios[currentPf].splice(idx, 1);
+            save();
+            renderDashboard();
+        }
+    }
+
+    function clearPortfolio() {
+        if (confirm("確定清空「" + currentPf + "」的所有股票紀錄？")) {
+            portfolios[currentPf] = [];
+            save();
+            renderDashboard();
+        }
+    }
+
+    function resetToDefault() {
+        if (confirm("恢復為最新範例資料？現有修改將會被覆蓋。")) {
+            portfolios = JSON.parse(JSON.stringify(DEFAULT_DATA));
+            currentPf = Object.keys(portfolios)[0];
+            save(); 
+            renderTabs(); 
+            renderDashboard();
+        }
+    }
+
+    function fmt(val) {
+        return '$' + Number(Math.abs(val)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // 核心渲染：股票分佈 (Distribution) 與佔比百分比全面依最新市值計算
+    function renderDashboard() {
+        document.getElementById("currentPfName").textContent = "組合：" + currentPf;
+        const stocks = (portfolios[currentPf] || []).map((s, idx) => {
+            const cost = s.quantity * s.avgPrice;
+            const curPrice = s.currentPrice !== undefined ? s.currentPrice : s.avgPrice;
+            const marketVal = s.quantity * curPrice;
+            const pl = marketVal - cost;
+            const plPct = cost > 0 ? (pl / cost) * 100 : 0;
+            return {
+                ...s,
+                currentPrice: curPrice,
+                name: s.name || getChineseStockName(s.ticker) || s.ticker,
+                cost: cost,
+                marketVal: marketVal,
+                pl: pl,
+                plPct: plPct,
+                color: COLORS[idx % COLORS.length],
+                origIndex: idx
+            };
+        });
+
+        const totalCost = stocks.reduce((acc, cur) => acc + cur.cost, 0);
+        const totalMarketVal = stocks.reduce((acc, cur) => acc + cur.marketVal, 0);
+        const totalPL = totalMarketVal - totalCost;
+        const totalPLPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+
+        // 股票分佈 (Distribution) 依當前市值比例計算
+        stocks.forEach(s => {
+            s.pct = totalMarketVal > 0 ? (s.marketVal / totalMarketVal) * 100 : 0;
+        });
+        // 依當前市值由大到小排序
+        stocks.sort((a, b) => b.marketVal - a.marketVal);
+
+        // 更新摘要統計卡片（4項指標水平排列）
+        document.getElementById("summaryTotalCost").textContent = fmt(totalCost);
+        document.getElementById("summaryMarketVal").textContent = "總市值: " + fmt(totalMarketVal);
+        document.getElementById("summaryStockCount").textContent = stocks.length + " 檔";
+
+        if (stocks.length > 0 && totalMarketVal > 0) {
+            const top = stocks[0];
+            const topName = top.name && top.name !== top.ticker ? " (" + top.name + ")" : "";
+            document.getElementById("summaryTopHolding").textContent = top.ticker + topName;
+            document.getElementById("summaryTopHoldingPct").textContent = top.pct.toFixed(1) + "% (市值 " + fmt(top.marketVal) + ")";
+        } else {
+            document.getElementById("summaryTopHolding").textContent = "-";
+            document.getElementById("summaryTopHoldingPct").textContent = "0.00%";
+        }
+
+        // 當前組合盈虧卡片
+        const plSign = totalPL > 0 ? '+' : (totalPL < 0 ? '-' : '');
+        const plColor = totalPL > 0 ? 'var(--success)' : (totalPL < 0 ? 'var(--danger)' : 'var(--text)');
+        const elPL = document.getElementById("summaryTotalPL");
+        elPL.textContent = plSign + fmt(totalPL);
+        elPL.style.color = plColor;
+
+        const elPLPct = document.getElementById("summaryTotalPLPct");
+        elPLPct.textContent = plSign + Math.abs(totalPLPct).toFixed(2) + "% (總回報率)";
+        elPLPct.style.color = plColor;
+
+        // 渲染持股表格
+        const tbody = document.getElementById("stockTableBody");
+        tbody.innerHTML = "";
+        if (stocks.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='8' class='empty-row'>此組合目前無股票紀錄，請於上方輸入代號新增。</td></tr>";
+        } else {
+            stocks.forEach(s => {
+                const tr = document.createElement("tr");
+                const nameDisplay = s.name && s.name !== s.ticker ? s.name : '';
+                const itemPLSign = s.pl > 0 ? '+' : (s.pl < 0 ? '-' : '');
+                const itemPLColor = s.pl > 0 ? 'var(--success)' : (s.pl < 0 ? 'var(--danger)' : 'var(--muted)');
+
+                tr.innerHTML = `
+                    <td>
+                        <div class="stock-cell">
+                            <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};flex-shrink:0;"></span>
+                            <div>
+                                <span class="ticker-badge">${s.ticker}</span>
+                                ${nameDisplay ? `<span class="stock-name">${nameDisplay}</span>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="text-align:right;">${s.quantity.toLocaleString()}</td>
+                    <td style="text-align:right;">${fmt(s.avgPrice)}</td>
+                    <td style="text-align:right;">
+                        <div class="price-editable-box" onclick="editStockPrice(${s.origIndex})" title="點擊修改/自訂最新現價">
+                            <span class="tv-price-tag">${fmt(s.currentPrice)}</span>
+                            <span class="edit-pen">✏️</span>
+                        </div>
+                        <span class="tv-source-badge" title="數據直接來自 TradingView">TradingView</span>
+                    </td>
+                    <td style="text-align:right;font-weight:600;">${fmt(s.marketVal)}</td>
+                    <td style="text-align:right;font-weight:600;color:${itemPLColor};">
+                        ${itemPLSign}${fmt(s.pl)}
+                        <div style="font-size:0.75rem;font-weight:normal;opacity:0.9;">${itemPLSign}${Math.abs(s.plPct).toFixed(2)}%</div>
+                    </td>
+                    <td>
+                        <div class="pct-bar-wrap">
+                            <div class="pct-bar-track"><div class="pct-bar-fill" style="width:${s.pct}%;background:${s.color};"></div></div>
+                            <span class="pct-num">${s.pct.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td style="text-align:center;"><button class="btn btn-danger btn-sm" onclick="deleteStock(${s.origIndex})">刪除</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        drawChart(stocks, totalMarketVal);
+        renderLegend(stocks);
+    }
+
+    // 繪製股票分佈 (Distribution) 圓餅圖
+    function drawChart(stocks, totalMarketVal) {
+        const canvas = document.getElementById("pieChart");
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 250 * dpr;
+        canvas.height = 250 * dpr;
+        canvas.style.width = "250px";
+        canvas.style.height = "250px";
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, 250, 250);
+
+        const cx = 125, cy = 125, outerR = 100, innerR = 52;
+        sliceAngles = [];
+
+        if (stocks.length === 0 || totalMarketVal === 0) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR, 0, 2 * Math.PI);
+            ctx.arc(cx, cy, innerR, 2 * Math.PI, 0, true);
+            ctx.fillStyle = "#334155";
+            ctx.fill();
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "13px var(--font)";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("無持股資料", cx, cy);
+            return;
+        }
+
+        let curAngle = -0.5 * Math.PI;
+        stocks.forEach(s => {
+            const angle = (s.marketVal / totalMarketVal) * 2 * Math.PI;
+            const end = curAngle + angle;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR, curAngle, end);
+            ctx.arc(cx, cy, innerR, end, curAngle, true);
+            ctx.closePath();
+            ctx.fillStyle = s.color;
+            ctx.fill();
+            ctx.strokeStyle = "#1e293b";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            sliceAngles.push({ start: curAngle, end: end, stock: s });
+            curAngle = end;
+        });
+
+        // 圓餅圖中央顯示當前總市值
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "11px var(--font)";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("總市值", cx, cy - 8);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 12px var(--font)";
+        ctx.fillText(fmt(totalMarketVal), cx, cy + 8);
+    }
+
+    function initChartEvents() {
+        const canvas = document.getElementById("pieChart");
+        const tip = document.getElementById("chartTooltip");
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left, y = e.clientY - rect.top;
+            const dx = x - 125, dy = y - 125;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist >= 52 && dist <= 100) {
+                let angle = Math.atan2(dy, dx);
+                if (angle < -0.5 * Math.PI) angle += 2 * Math.PI;
+                const match = sliceAngles.find(s => angle >= s.start && angle <= s.end);
+                if (match) {
+                    tip.style.display = "block";
+                    tip.style.left = x + "px";
+                    tip.style.top = y + "px";
+                    const namePart = match.stock.name && match.stock.name !== match.stock.ticker ? " (" + match.stock.name + ")" : "";
+                    const itemPLSign = match.stock.pl > 0 ? '+' : (match.stock.pl < 0 ? '-' : '');
+                    tip.innerHTML = `
+                        <strong>${match.stock.ticker}${namePart}</strong><br/>
+                        TradingView現價: <strong>${fmt(match.stock.currentPrice)}</strong><br/>
+                        當前市值: ${fmt(match.stock.marketVal)} (佔比: <strong>${match.stock.pct.toFixed(1)}%</strong>)<br/>
+                        盈虧: <strong>${itemPLSign}${fmt(match.stock.pl)} (${itemPLSign}${match.stock.plPct.toFixed(1)}%)</strong>
+                    `;
+                    canvas.style.cursor = "pointer";
+                    return;
+                }
+            }
+            tip.style.display = "none";
+            canvas.style.cursor = "default";
+        });
+        canvas.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+    }
+
+    function renderLegend(stocks) {
+        const box = document.getElementById("chartLegend");
+        box.innerHTML = "";
+        stocks.forEach(s => {
+            const badge = document.createElement("div");
+            badge.className = "legend-badge";
+            const nameDisplay = s.name && s.name !== s.ticker ? " " + s.name : "";
+            badge.innerHTML = `
+                <span class="legend-color" style="background:${s.color};"></span>
+                <span class="legend-text"><strong>${s.ticker}</strong><span style="font-size:0.75rem;color:var(--muted);">${nameDisplay}</span></span>
+                <span style="color:var(--muted);font-weight:600;margin-left:4px;">${s.pct.toFixed(1)}%</span>
+            `;
+            box.appendChild(badge);
+        });
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
